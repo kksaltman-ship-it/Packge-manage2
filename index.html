@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>荷物管理台帳（受入・発送 統合版）</title>
+    <!-- 文字認識(OCR)用ライブラリ -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #1e293b;
+            --accent-color: #2563eb;
+            --bg-color: #f8fafc;
+            --phone-color: #16a34a;
+            --ocr-color: #d97706;
+            --excel-color: #0d9488;
+            --danger-color: #dc2626;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', sans-serif;
+            background-color: var(--bg-color);
+            margin: 0;
+            padding: 15px;
+            color: #334155;
+        }
+
+        .container {
+            max-width: 1300px;
+            margin: 0 auto;
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        }
+
+        .header-area {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid var(--accent-color);
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        h1 {
+            color: var(--primary-color);
+            margin: 0;
+            font-size: 1.4rem;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        /* 登録フォーム */
+        .form-section {
+            background-color: #f1f5f9;
+            padding: 20px;
+            border-radius: 6px;
+            margin-bottom: 25px;
+            max-width: 550px;
+        }
+
+        .form-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-bottom: 15px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group label {
+            font-weight: bold;
+            font-size: 0.85em;
+            margin-bottom: 4px;
+            color: #475569;
+        }
+
+        .form-group input, .form-group select {
+            padding: 10px;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            font-size: 0.95em;
+            background-color: #fff;
+        }
+
+        .input-with-btn {
+            display: flex;
+            gap: 8px;
+        }
+
+        .input-with-btn input { flex: 1; }
+
+        .btn-reset {
+            background-color: #64748b;
+            color: white;
+            border: none;
+            padding: 0 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85em;
+            font-weight: bold;
+            white-space: nowrap;
+        }
+
+        .btn {
+            background-color: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.2s;
+            font-size: 1em;
+            width: 100%;
+        }
+
+        .btn-excel {
+            background-color: var(--excel-color);
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+
+        .btn-clear-all {
+            background-color: var(--danger-color);
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+
+        .btn-photo-group {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+
+        .btn-camera {
+            background-color: #0284c7;
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9em;
+            font-weight: bold;
+            flex: 1;
+        }
+
+        .btn-ocr {
+            background-color: var(--ocr-color);
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9em;
+            font-weight: bold;
+            flex: 1;
+        }
+
+        .photo-preview-container {
+            display: none;
+            margin-bottom: 12px;
+            position: relative;
+            text-align: center;
+        }
+
+        .photo-preview-img {
+            max-width: 100%;
+            max-height: 180px;
+            border: 1px dashed var(--accent-color);
+            border-radius: 4px;
+        }
+
+        /* 検索・操作バー */
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        .search-input, .filter-select {
+            padding: 8px 12px;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+        }
+
+        .search-input { flex-grow: 1; }
+
+        /* テーブル */
+        .table-wrapper { overflow-x: auto; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.88em;
+        }
+
+        th, td {
+            padding: 10px 8px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+            vertical-align: middle;
+        }
+
+        th {
+            background-color: var(--primary-color);
+            color: white;
+            white-space: nowrap;
+        }
+
+        tr:hover { background-color: #f8fafc; }
+
+        .phone-link {
+            color: #2563eb;
+            font-weight: bold;
+            text-decoration: underline;
+        }
+
+        .thumb-img {
+            width: 45px;
+            height: 45px;
+            object-fit: cover;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            cursor: pointer;
+            vertical-align: middle;
+        }
+
+        .sig-img {
+            max-height: 35px;
+            max-width: 90px;
+            border: 1px solid #ddd;
+            background: #fff;
+            vertical-align: middle;
+        }
+
+        .badge {
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            font-weight: bold;
+            display: inline-block;
+        }
+        .badge-type-in { background-color: #e0f2fe; color: #0369a1; }
+        .badge-type-out { background-color: #fce7f3; color: #be185d; }
+
+        .badge-pending { background-color: #fef3c7; color: #b45309; }
+        .badge-contacted { background-color: #dbeafe; color: #1e40af; }
+        .badge-completed { background-color: #dcfce7; color: #15803d; }
+
+        .btn-sm {
+            padding: 5px 8px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8em;
+            margin-right: 2px;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn-phone { background-color: var(--phone-color); color: white; }
+        .btn-pass { background-color: #0284c7; color: white; }
+        .btn-del { background-color: #ef4444; color: white; }
+
+        /* モーダル */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            width: 90%;
+            max-width: 400px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        canvas {
+            border: 2px dashed #cbd5e1;
+            border-radius: 4px;
+            cursor: crosshair;
+            touch-action: none;
+            background: #fff;
+        }
+
+        .img-modal-view {
+            max-width: 100%;
+            max-height: 70vh;
+            border-radius: 4px;
+        }
+
+        @media print {
+            .form-section, .controls, .header-actions, .btn-sm, .no-print { display: none !important; }
+            body { padding: 0; background: white; }
+            .container { box-shadow: none; max-width: 100%; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header-area">
+        <h1>荷物預かり・受渡管理台帳 (受入・発送統合版)</h1>
+        <div class="header-actions no-print">
+            <button class="btn-excel" onclick="exportToExcel()">📊 Excel/CSV出力</button>
+            <button class="btn-clear-all" onclick="clearAllDataDB()">🗑 全データ削除(容量解放)</button>
+            <button class="btn" style="width:auto; padding:8px 15px;" onclick="window.print()">印刷</button>
+        </div>
+    </div>
+
+    <!-- 荷物受付フォーム -->
+    <div class="form-section no-print">
+        <h3 style="margin-top:0; margin-bottom:15px; font-size:1.1em; color:var(--primary-color);">荷物の登録</h3>
+        
+        <div class="btn-photo-group">
+            <button type="button" class="btn-camera" onclick="triggerCamera('direct')">📷 伝票写真を保存</button>
+            <button type="button" class="btn-ocr" onclick="triggerCamera('ocr')">🔍 写真＋文字解析</button>
+        </div>
+        <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display: none;" onchange="handleImageCapture(event)">
+
+        <div id="photoPreviewContainer" class="photo-preview-container">
+            <img id="photoPreview" class="photo-preview-img" alt="伝票プレビュー">
+            <div style="font-size:0.75em; color:#64748b; margin-top:2px;">※撮影写真が添付されます</div>
+        </div>
+
+        <form id="itemForm">
+            <div class="form-stack">
+                <div class="form-group">
+                    <label for="category">区分 *</label>
+                    <select id="category" required>
+                        <option value="受入">【受入】社内渡しの荷物</option>
+                        <option value="発送">【発送】社外発送の荷物</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="date">受付日付 *</label>
+                    <input type="date" id="date" required>
+                </div>
+                <div class="form-group">
+                    <label for="trackingNo">荷物番号（数字のみ） *</label>
+                    <div class="input-with-btn">
+                        <input type="number" id="trackingNo" min="1" required>
+                        <button type="button" class="btn-reset" onclick="resetSeqNum()" title="番号を1にリセット">🔄 1にリセット</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="recipient" id="labelRecipient">受取人／宛先 *</label>
+                    <input type="text" id="recipient" required placeholder="社内社員名 または 配送先名称">
+                </div>
+                <div class="form-group">
+                    <label for="extension">内線番号（社内通知用）</label>
+                    <input type="tel" id="extension" placeholder="例: 2401">
+                </div>
+                <div class="form-group">
+                    <label for="sender" id="labelSender">差出人／依頼主</label>
+                    <input type="text" id="sender" placeholder="差出人企業名 または 社内依頼者">
+                </div>
+                <div class="form-group">
+                    <label for="packageType">荷姿／運送会社</label>
+                    <input type="text" id="packageType" placeholder="段ボール, ヤマト, 佐川等">
+                </div>
+                <div class="form-group">
+                    <label for="quantity">個数 *</label>
+                    <input type="number" id="quantity" value="1" min="1" required>
+                </div>
+                <div class="form-group">
+                    <label for="location">一時保管場所</label>
+                    <input type="text" id="location" placeholder="例: 集荷待ち棚, 事務室A-1">
+                </div>
+                <div class="form-group">
+                    <label for="note">備考</label>
+                    <input type="text" id="note" placeholder="例: 冷蔵、着払い、壊れ物等">
+                </div>
+            </div>
+            <button type="submit" class="btn">荷物を一時預かる（登録）</button>
+        </form>
+    </div>
+
+    <!-- 検索とフィルター -->
+    <div class="controls no-print">
+        <input type="text" id="searchInput" class="search-input" placeholder="受取人/宛先、荷物番号、差出人、保管場所等で検索...">
+        <select id="filterCategory" class="filter-select">
+            <option value="all">すべての区分</option>
+            <option value="受入">受入（社内渡し）</option>
+            <option value="発送">発送（社外発送）</option>
+        </select>
+        <select id="filterStatus" class="filter-select">
+            <option value="all">すべてのステータス</option>
+            <option value="未受領">未処理（未連絡/未発送）</option>
+            <option value="連絡済">連絡済（受渡待ち）</option>
+            <option value="渡済">完了（受渡済/発送済）</option>
+        </select>
+    </div>
+
+    <!-- 一覧テーブル -->
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>区分</th>
+                    <th>日付</th>
+                    <th>写真</th>
+                    <th>荷物番号</th>
+                    <th>受取人/宛先</th>
+                    <th>内線</th>
+                    <th>差出人/依頼主</th>
+                    <th>荷姿/業者</th>
+                    <th>個数</th>
+                    <th>保管場所</th>
+                    <th>備考</th>
+                    <th>状態</th>
+                    <th>引渡/発送サイン</th>
+                    <th class="no-print">操作</th>
+                </tr>
+            </thead>
+            <tbody id="itemList"></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- 画像拡大モーダル -->
+<div id="imgModal" class="modal" onclick="closeImgModal()">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <h3>伝票写真の拡大</h3>
+        <img id="imgModalTarget" class="img-modal-view" src="" alt="伝票拡大画像">
+        <div style="margin-top:15px;">
+            <button class="btn-sm" style="background:#64748b; color:white; padding:8px 16px;" onclick="closeImgModal()">閉じる</button>
+        </div>
+    </div>
+</div>
+
+<!-- サイン用モーダル -->
+<div id="sigModal" class="modal">
+    <div class="modal-content">
+        <h3 id="sigModalTitle">受渡し・発送確認サイン</h3>
+        <p style="font-size:0.8em; color:#64748b; margin-top:-10px;">枠内に確認用サイン（署名）を行ってください</p>
+        <canvas id="sigCanvas" width="300" height="150"></canvas>
+        <div style="margin-top: 15px; display: flex; gap: 10px; justify-content: center;">
+            <button class="btn-sm btn-del" onclick="clearCanvas()">やり直す</button>
+            <button class="btn-sm" style="background:#64748b; color:white;" onclick="closeModal()">キャンセル</button>
+            <button class="btn-sm btn-pass" style="padding:8px 12px;" onclick="saveSignature()">完了登録</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const DB_NAME = 'PackageManageDB';
+    const DB_VERSION = 1;
+    const STORE_NAME = 'packages';
+    let db = null;
+    let autoSeq = 1;
+    let activeItemId = null;
+    let currentCaptureMode = 'direct';
+    let currentPhotoData = null;
+
+    const itemForm = document.getElementById('itemForm');
+    const itemList = document.getElementById('itemList');
+    const searchInput = document.getElementById('searchInput');
+    const filterCategory = document.getElementById('filterCategory');
+    const filterStatus = document.getElementById('filterStatus');
+    const photoPreviewContainer = document.getElementById('photoPreviewContainer');
+    const photoPreview = document.getElementById('photoPreview');
+    const trackingNoInput = document.getElementById('trackingNo');
+
+    const canvas = document.getElementById('sigCanvas');
+    const ctx = canvas.getContext('2d');
+    let isDrawing = false;
+
+    function initDB() {
+        return new Promise((resolve, reject) => {
+            const request = indexedDB.open(DB_NAME, DB_VERSION);
+            request.onupgradeneeded = (e) => {
+                const dbInstance = e.target.result;
+                if (!dbInstance.objectStoreNames.contains(STORE_NAME)) {
+                    dbInstance.createObjectStore(STORE_NAME, { keyPath: 'id' });
+                }
+            };
+            request.onsuccess = (e) => {
+                db = e.target.result;
+                resolve(db);
+            };
+            request.onerror = (e) => reject(e.target.error);
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+        await initDB();
+        document.getElementById('date').valueAsDate = new Date();
+        loadNextSeq();
+        renderItems();
+        setupCanvasEvents();
+    });
+
+    function loadNextSeq() {
+        const storedSeq = localStorage.getItem('packageSeqNumOnly');
+        autoSeq = storedSeq ? parseInt(storedSeq, 10) : 1;
+        setDefaultNo();
+    }
+
+    function setDefaultNo() {
+        trackingNoInput.value = autoSeq;
+    }
+
+    function resetSeqNum() {
+        autoSeq = 1;
+        localStorage.setItem('packageSeqNumOnly', autoSeq);
+        setDefaultNo();
+    }
+
+    function getAllItemsDB() {
+        return new Promise((resolve) => {
+            const tx = db.transaction(STORE_NAME, 'readonly');
+            const store = tx.objectStore(STORE_NAME);
+            const request = store.getAll();
+            request.onsuccess = () => resolve(request.result || []);
+        });
+    }
+
+    function saveItemDB(item) {
+        return new Promise((resolve) => {
+            const tx = db.transaction(STORE_NAME, 'readwrite');
+            const store = tx.objectStore(STORE_NAME);
+            store.put(item);
+            tx.oncomplete = () => resolve();
+        });
+    }
+
+    function deleteItemDB(id) {
+        return new Promise((resolve) => {
+            const tx = db.transaction(STORE_NAME, 'readwrite');
+            const store = tx.objectStore(STORE_NAME);
+            store.delete(id);
+            tx.oncomplete = () => resolve();
+        });
+    }
+
+    async function clearAllDataDB() {
+        const items = await getAllItemsDB();
+        if (items.length === 0) {
+            alert('削除するデータがありません。');
+            return;
+        }
+
+        const confirmClear = confirm('⚠️ 注意: 登録済みの全データ（受入・発送・添付写真含む）を削除してスマホの容量を空にしますか？');
+        if (!confirmClear) return;
+
+        return new Promise((resolve) => {
+            const tx = db.transaction(STORE_NAME, 'readwrite');
+            const store = tx.objectStore(STORE_NAME);
+            store.clear();
+            tx.oncomplete = () => {
+                alert('すべてのデータを削除しました。');
+                resetSeqNum();
+                renderItems();
+                resolve();
+            };
+        });
+    }
+
+    async function exportToExcel() {
+        const items = await getAllItemsDB();
+        if (items.length === 0) {
+            alert('エクスポートするデータがありません。');
+            return;
+        }
+
+        let csvContent = "区分,受付日付,荷物番号,受取人/宛先,内線番号,差出人/依頼主,荷姿/業者,個数,保管場所,備考,状態,写真有無,サイン有無\\n";
+
+        items.forEach(item => {
+            const row = [
+                `"${item.category || '受入'}"`,
+                `"${item.date}"`,
+                `"${item.trackingNo}"`,
+                `"${item.recipient}"`,
+                `"${item.extension || ''}"`,
+                `"${item.sender || ''}"`,
+                `"${item.packageType || ''}"`,
+                `"${item.quantity}"`,
+                `"${item.location || ''}"`,
+                `"${item.note || ''}"`,
+                `"${item.status}"`,
+                `"${item.photoData ? 'あり' : 'なし'}"`,
+                `"${item.signatureData ? 'あり' : 'なし'}"`
+            ];
+            csvContent += row.join(",") + "\\n";
+        });
+
+        const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
+        const blob = new Blob([bom, csvContent], { type: "text/csv;charset=utf-8;" });
+
+        const now = new Date();
+        const dateStr = now.toISOString().split('T')[0];
+        const fileName = `荷物管理台帳(受入・発送)_${dateStr}.csv`;
+
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.setAttribute("download", fileName);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    function triggerCamera(mode) {
+        currentCaptureMode = mode;
+        document.getElementById('cameraInput').click();
+    }
+
+    function handleImageCapture(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                const maxDim = 800;
+                let w = img.width, h = img.height;
+                if (w > maxDim || h > maxDim) {
+                    if (w > h) { h = Math.round((h * maxDim) / w); w = maxDim; }
+                    else { w = Math.round((w * maxDim) / h); h = maxDim; }
+                }
+
+                const cvs = document.createElement('canvas');
+                cvs.width = w; cvs.height = h;
+                const cctx = cvs.getContext('2d');
+                cctx.drawImage(img, 0, 0, w, h);
+
+                currentPhotoData = cvs.toDataURL('image/jpeg', 0.75);
+                photoPreview.src = currentPhotoData;
+                photoPreviewContainer.style.display = 'block';
+
+                if (currentCaptureMode === 'ocr') runOCR(file);
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+        event.target.value = '';
+    }
+
+    async function runOCR(file) {
+        alert('文字解析を開始します...（数秒お待ちください）');
+        try {
+            const worker = await Tesseract.createWorker('jpn');
+            const ret = await worker.recognize(file);
+            await worker.terminate();
+
+            const text = ret.data.text.trim().replace(/\s+/g, ' ');
+            if (text && !document.getElementById('recipient').value) {
+                document.getElementById('recipient').value = text.substring(0, 15);
+                alert('解析が完了しました。');
+            }
+        } catch (err) {
+            console.error('OCR Error:', err);
+        }
+    }
+
+    itemForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const inputNum = parseInt(trackingNoInput.value, 10);
+
+        const newItem = {
+            id: Date.now(),
+            category: document.getElementById('category').value,
+            date: document.getElementById('date').value,
+            trackingNo: String(inputNum),
+            recipient: document.getElementById('recipient').value,
+            extension: document.getElementById('extension').value,
+            sender: document.getElementById('sender').value,
+            packageType: document.getElementById('packageType').value,
+            quantity: document.getElementById('quantity').value,
+            location: document.getElementById('location').value,
+            note: document.getElementById('note').value,
+            photoData: currentPhotoData,
+            status: '未受領',
+            signatureData: null
+        };
+
+        await saveItemDB(newItem);
+
+        autoSeq = inputNum + 1;
+        localStorage.setItem('packageSeqNumOnly', autoSeq);
+
+        itemForm.reset();
+        currentPhotoData = null;
+        photoPreviewContainer.style.display = 'none';
+        document.getElementById('date').valueAsDate = new Date();
+        setDefaultNo();
+        renderItems();
+    });
+
+    async function handleContact(id, extension) {
+        const items = await getAllItemsDB();
+        const target = items.find(i => i.id === id);
+        if (target && target.status === '未受領') {
+            target.status = '連絡済';
+            await saveItemDB(target);
+            renderItems();
+        }
+        window.location.href = `tel:${extension}`;
+    }
+
+    function openImgModal(src) {
+        document.getElementById('imgModalTarget').src = src;
+        document.getElementById('imgModal').style.display = 'flex';
+    }
+
+    function closeImgModal() {
+        document.getElementById('imgModal').style.display = 'none';
+    }
+
+    function openSignModal(id) {
+        activeItemId = id;
+        clearCanvas();
+        document.getElementById('sigModal').style.display = 'flex';
+    }
+
+    function closeModal() {
+        document.getElementById('sigModal').style.display = 'none';
+        activeItemId = null;
+    }
+
+    function setupCanvasEvents() {
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = '#000';
+
+        const getPos = (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            return { x: clientX - rect.left, y: clientY - rect.top };
+        };
+
+        const startDraw = (e) => { isDrawing = true; const p = getPos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); };
+        const draw = (e) => { if (!isDrawing) return; const p = getPos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); };
+        const stopDraw = () => { isDrawing = false; };
+
+        canvas.addEventListener('mousedown', startDraw);
+        canvas.addEventListener('mousemove', draw);
+        canvas.addEventListener('mouseup', stopDraw);
+
+        canvas.addEventListener('touchstart', startDraw);
+        canvas.addEventListener('touchmove', draw);
+        canvas.addEventListener('touchend', stopDraw);
+    }
+
+    function clearCanvas() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    async function saveSignature() {
+        if (!activeItemId) return;
+        const dataURL = canvas.toDataURL();
+
+        const items = await getAllItemsDB();
+        const target = items.find(i => i.id === activeItemId);
+        if (target) {
+            target.status = '渡済';
+            target.signatureData = dataURL;
+            await saveItemDB(target);
+            renderItems();
+        }
+        closeModal();
+    }
+
+    async function deleteItem(id) {
+        if (confirm('この記録を削除しますか？')) {
+            await deleteItemDB(id);
+            renderItems();
+        }
+    }
+
+    async function renderItems() {
+        const items = await getAllItemsDB();
+        items.sort((a, b) => b.id - a.id);
+
+        const searchText = searchInput.value.toLowerCase();
+        const categoryFilter = filterCategory.value;
+        const statusFilter = filterStatus.value;
+        itemList.innerHTML = '';
+
+        const filtered = items.filter(item => {
+            const matchSearch = item.recipient.toLowerCase().includes(searchText) ||
+                                item.trackingNo.toLowerCase().includes(searchText) ||
+                                (item.sender && item.sender.toLowerCase().includes(searchText)) ||
+                                (item.location && item.location.toLowerCase().includes(searchText)) ||
+                                (item.note && item.note.toLowerCase().includes(searchText));
+            const matchCategory = categoryFilter === 'all' || (item.category || '受入') === categoryFilter;
+            const matchStatus = statusFilter === 'all' || item.status === statusFilter;
+            return matchSearch && matchCategory && matchStatus;
+        });
+
+        if (filtered.length === 0) {
+            itemList.innerHTML = `<tr><td colspan="14" style="text-align:center; color:#888;">該当するデータがありません</td></tr>`;
+            return;
+        }
+
+        filtered.forEach(item => {
+            const tr = document.createElement('tr');
+            
+            const cat = item.category || '受入';
+            const catBadgeClass = cat === '受入' ? 'badge-type-in' : 'badge-type-out';
+
+            let badgeClass = 'badge-pending';
+            if (item.status === '連絡済') badgeClass = 'badge-contacted';
+            if (item.status === '渡済') badgeClass = 'badge-completed';
+
+            let photoHTML = '<span style="color:#94a3b8;">なし</span>';
+            if (item.photoData) {
+                photoHTML = `<img src="${item.photoData}" class="thumb-img" onclick="openImgModal('${item.photoData}')" title="タップで拡大">`;
+            }
+
+            let sigHTML = '<span style="color:#94a3b8;">-</span>';
+            if (item.signatureData) {
+                sigHTML = `<img src="${item.signatureData}" class="sig-img" alt="サイン">`;
+            }
+
+            let extensionHTML = '-';
+            if (item.extension) {
+                extensionHTML = `<a href="javascript:void(0)" class="phone-link" onclick="handleContact(${item.id}, '${escapeHtml(item.extension)}')" title="電話発信">📞 ${escapeHtml(item.extension)}</a>`;
+            }
+
+            let actionButtons = '';
+            if (item.extension) {
+                actionButtons += `<button class="btn-sm btn-phone" onclick="handleContact(${item.id}, '${escapeHtml(item.extension)}')" title="電話発信">📞電話</button>`;
+            }
+            if (item.status !== '渡済') {
+                const btnLabel = cat === '受入' ? '受渡サイン' : '発送完了サイン';
+                actionButtons += `<button class="btn-sm btn-pass" onclick="openSignModal(${item.id})">${btnLabel}</button>`;
+            }
+            actionButtons += `<button class="btn-sm btn-del" onclick="deleteItem(${item.id})">削除</button>`;
+
+            tr.innerHTML = `
+                <td><span class="badge ${catBadgeClass}">${cat}</span></td>
+                <td>${item.date}</td>
+                <td>${photoHTML}</td>
+                <td><strong>${escapeHtml(item.trackingNo)}</strong></td>
+                <td><strong>${escapeHtml(item.recipient)}</strong></td>
+                <td>${extensionHTML}</td>
+                <td>${escapeHtml(item.sender || '-')}</td>
+                <td>${escapeHtml(item.packageType || '-')}</td>
+                <td>${item.quantity}</td>
+                <td>${escapeHtml(item.location || '-')}</td>
+                <td>${escapeHtml(item.note || '-')}</td>
+                <td><span class="badge ${badgeClass}">${item.status === '渡済' ? (cat === '受入' ? '受渡済' : '発送済') : item.status}</span></td>
+                <td>${sigHTML}</td>
+                <td class="no-print">${actionButtons}</td>
+            `;
+            itemList.appendChild(tr);
+        });
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m]));
+    }
+
+    searchInput.addEventListener('input', renderItems);
+    filterCategory.addEventListener('change', renderItems);
+    filterStatus.addEventListener('change', renderItems);
+</script>
+</body>
+</html>
